@@ -7,9 +7,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type CreateOption func(*toolchainv1alpha1.SpaceProvisionerConfig)
+type ModifyOption func(*toolchainv1alpha1.SpaceProvisionerConfig)
 
-func NewSpaceProvisionerConfig(name string, namespace string, opts ...CreateOption) *toolchainv1alpha1.SpaceProvisionerConfig {
+func NewSpaceProvisionerConfig(name string, namespace string, opts ...ModifyOption) *toolchainv1alpha1.SpaceProvisionerConfig {
 	spc := &toolchainv1alpha1.SpaceProvisionerConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -24,27 +24,33 @@ func NewSpaceProvisionerConfig(name string, namespace string, opts ...CreateOpti
 	return spc
 }
 
-func ReferencingToolchainCluster(name string) CreateOption {
+func ReferencingToolchainCluster(name string) ModifyOption {
 	return func(spc *toolchainv1alpha1.SpaceProvisionerConfig) {
 		spc.Spec.ToolchainCluster = name
 	}
 }
 
-func Enabled(enabled bool) CreateOption {
+func Enabled(enabled bool) ModifyOption {
 	return func(spc *toolchainv1alpha1.SpaceProvisionerConfig) {
 		spc.Spec.Enabled = enabled
 	}
 }
 
-func WithReadyConditionValid() CreateOption {
+func WithPlacementRoles(placementRoles ...string) ModifyOption {
+	return func(spc *toolchainv1alpha1.SpaceProvisionerConfig) {
+		spc.Spec.PlacementRoles = placementRoles
+	}
+}
+
+func WithReadyConditionValid() ModifyOption {
 	return WithReadyCondition(corev1.ConditionTrue, toolchainv1alpha1.SpaceProvisionerConfigValidReason)
 }
 
-func WithReadyConditionInvalid(reason string) CreateOption {
+func WithReadyConditionInvalid(reason string) ModifyOption {
 	return WithReadyCondition(corev1.ConditionFalse, reason)
 }
 
-func WithReadyCondition(status corev1.ConditionStatus, reason string) CreateOption {
+func WithReadyCondition(status corev1.ConditionStatus, reason string) ModifyOption {
 	return func(spc *toolchainv1alpha1.SpaceProvisionerConfig) {
 		spc.Status.Conditions, _ = condition.AddOrUpdateStatusConditions(spc.Status.Conditions, toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
@@ -54,13 +60,13 @@ func WithReadyCondition(status corev1.ConditionStatus, reason string) CreateOpti
 	}
 }
 
-func MaxNumberOfSpaces(number uint) CreateOption {
+func MaxNumberOfSpaces(number uint) ModifyOption {
 	return func(spc *toolchainv1alpha1.SpaceProvisionerConfig) {
 		spc.Spec.CapacityThresholds.MaxNumberOfSpaces = number
 	}
 }
 
-func MaxMemoryUtilizationPercent(number uint) CreateOption {
+func MaxMemoryUtilizationPercent(number uint) ModifyOption {
 	return func(spc *toolchainv1alpha1.SpaceProvisionerConfig) {
 		spc.Spec.CapacityThresholds.MaxMemoryUtilizationPercent = number
 	}

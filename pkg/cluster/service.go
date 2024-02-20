@@ -9,6 +9,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/apis"
+	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
@@ -72,9 +73,14 @@ func (s *ToolchainClusterService) AddOrUpdateToolchainCluster(cluster *toolchain
 	log := s.enrichLogger(cluster)
 	// log.Info("observed a cluster")
 
-	err := s.addToolchainCluster(log, cluster)
+	spc, err := findSpaceProvisionerConfig(context.TODO(), s.client, cluster)
 	if err != nil {
-		return errors.Wrap(err, "the cluster was not added nor updated")
+		return fmt.Errorf("the cluster was not added or updated: %w", err)
+	}
+
+	err = s.addToolchainCluster(log, cluster, spc)
+	if err != nil {
+		return fmt.Errorf("the cluster was not added or updated: %w", err)
 	}
 	return nil
 }
@@ -84,9 +90,9 @@ func RoleLabel(role Role) string {
 	return fmt.Sprintf("%s.%s%s", labelClusterRolePrefix, toolchainv1alpha1.LabelKeyPrefix, string(role))
 }
 
-func (s *ToolchainClusterService) addToolchainCluster(log logr.Logger, toolchainCluster *toolchainv1alpha1.ToolchainCluster) error {
+func (s *ToolchainClusterService) addToolchainCluster(log logr.Logger, toolchainCluster *toolchainv1alpha1.ToolchainCluster, spaceProvisionerConfig *toolchainv1alpha1.SpaceProvisionerConfig) error {
 	// create the restclient of toolchainCluster
-	clusterConfig, err := NewClusterConfig(s.client, toolchainCluster, s.timeout)
+	clusterConfig, err := newClusterConfig(s.client, toolchainCluster, spaceProvisionerConfig, s.timeout)
 	if err != nil {
 		return errors.Wrap(err, "cannot create ToolchainCluster Config")
 	}
@@ -151,11 +157,18 @@ func (s *ToolchainClusterService) refreshCache() {
 	toolchainClusters := &toolchainv1alpha1.ToolchainClusterList{}
 	if err := s.client.List(context.TODO(), toolchainClusters, &client.ListOptions{Namespace: s.namespace}); err != nil {
 		s.log.Error(err, "the cluster cache was not refreshed")
+		return
 	}
+	spcByClusterName, err := getSpaceProvisionerConfigsByClusterName(context.TODO(), s.client, s.namespace)
+	if err != nil {
+		s.log.Error(err, "the cluster cache was not refreshed")
+		return
+	}
+
 	for i := range toolchainClusters.Items {
 		cluster := toolchainClusters.Items[i] // avoids the `G601: Implicit memory aliasing in for loop` problem
 		log := s.enrichLogger(&cluster)
-		err := s.addToolchainCluster(log, &cluster)
+		err := s.addToolchainCluster(log, &cluster, spcByClusterName[cluster.Name])
 		if err != nil {
 			log.Error(err, "the cluster was not added", "cluster", cluster)
 		}
@@ -167,8 +180,40 @@ func (s *ToolchainClusterService) enrichLogger(cluster *toolchainv1alpha1.Toolch
 		WithValues("Request.Namespace", cluster.Namespace, "Request.Name", cluster.Name)
 }
 
+func findSpaceProvisionerConfig(ctx context.Context, cl client.Client, toolchainCluster *toolchainv1alpha1.ToolchainCluster) (*toolchainv1alpha1.SpaceProvisionerConfig, error) {
+	spcsByCluster, err := getSpaceProvisionerConfigsByClusterName(ctx, cl, toolchainCluster.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find the SpaceProvisionerConfig of toolchain cluster '%s': %w", client.ObjectKeyFromObject(toolchainCluster), err)
+	}
+
+	return spcsByCluster[toolchainCluster.Name], nil
+}
+
+func getSpaceProvisionerConfigsByClusterName(ctx context.Context, cl client.Client, namespace string) (map[string]*toolchainv1alpha1.SpaceProvisionerConfig, error) {
+	spaceProvisionerConfigs := &toolchainv1alpha1.SpaceProvisionerConfigList{}
+	if err := cl.List(ctx, spaceProvisionerConfigs, &client.ListOptions{Namespace: namespace}); err != nil {
+		return nil, fmt.Errorf("failed to list SpaceProvisionerConfigs in namespace '%s': %w", namespace, err)
+	}
+
+	spaceProvisionerConfigsByClusterName := make(map[string]*toolchainv1alpha1.SpaceProvisionerConfig, len(spaceProvisionerConfigs.Items))
+	for _, spc := range spaceProvisionerConfigs.Items {
+		spc := spc // avoid memory aliasing until we're on Go 1.22
+		spaceProvisionerConfigsByClusterName[spc.Spec.ToolchainCluster] = &spc
+	}
+
+	return spaceProvisionerConfigsByClusterName, nil
+}
+
 // NewClusterConfig generate a new cluster config by fetching the necessary info the given ToolchainCluster's associated Secret and taking all data from ToolchainCluster CR
 func NewClusterConfig(cl client.Client, toolchainCluster *toolchainv1alpha1.ToolchainCluster, timeout time.Duration) (*Config, error) {
+	spc, err := findSpaceProvisionerConfig(context.TODO(), cl, toolchainCluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find the SpaceProvisionerConfig of the cluster '%s': %w", client.ObjectKeyFromObject(toolchainCluster), err)
+	}
+	return newClusterConfig(cl, toolchainCluster, spc, timeout)
+}
+
+func newClusterConfig(cl client.Client, toolchainCluster *toolchainv1alpha1.ToolchainCluster, spaceProvisionerConfig *toolchainv1alpha1.SpaceProvisionerConfig, timeout time.Duration) (*Config, error) {
 	clusterName := toolchainCluster.Name
 
 	apiEndpoint := toolchainCluster.Spec.APIEndpoint
@@ -214,6 +259,14 @@ func NewClusterConfig(cl client.Client, toolchainCluster *toolchainv1alpha1.Tool
 	restConfig.Burst = toolchainAPIBurst
 	restConfig.Timeout = timeout
 
+	provisioningConfig := ProvisioningConfig{}
+	if spaceProvisionerConfig != nil && condition.IsTrue(spaceProvisionerConfig.Status.Conditions, toolchainv1alpha1.ConditionReady) {
+		provisioningConfig = ProvisioningConfig{
+			Enabled:            spaceProvisionerConfig.Spec.Enabled,
+			PlacementRoles:     spaceProvisionerConfig.Spec.PlacementRoles,
+			CapacityThresholds: spaceProvisionerConfig.Spec.CapacityThresholds,
+		}
+	}
 	return &Config{
 		Name:              toolchainCluster.Name,
 		APIEndpoint:       toolchainCluster.Spec.APIEndpoint,
@@ -222,6 +275,7 @@ func NewClusterConfig(cl client.Client, toolchainCluster *toolchainv1alpha1.Tool
 		OperatorNamespace: toolchainCluster.Labels[labelNamespace],
 		OwnerClusterName:  toolchainCluster.Labels[labelOwnerClusterName],
 		Labels:            toolchainCluster.Labels,
+		Provisioning:      provisioningConfig,
 	}, nil
 }
 
@@ -241,9 +295,14 @@ func ListToolchainClusterConfigs(cl client.Client, namespace string, clusterType
 	if err := cl.List(context.TODO(), toolchainClusters, client.InNamespace(namespace), client.MatchingLabels{LabelType: string(clusterType)}); err != nil {
 		return nil, err
 	}
+	spcByClusterName, err := getSpaceProvisionerConfigsByClusterName(context.TODO(), cl, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list the SpaceProvisionerConfigs in namespace '%s': %w", namespace, err)
+	}
+
 	var configs []*Config
 	for _, cluster := range toolchainClusters.Items {
-		clusterConfig, err := NewClusterConfig(cl, &cluster, timeout) // nolint:gosec
+		clusterConfig, err := newClusterConfig(cl, &cluster, spcByClusterName[cluster.Name], timeout) // nolint:gosec
 		if err != nil {
 			return nil, err
 		}

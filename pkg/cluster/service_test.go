@@ -9,6 +9,7 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"github.com/codeready-toolchain/toolchain-common/pkg/test/spaceprovisionerconfig"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test/verify"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -22,7 +23,6 @@ func TestAddToolchainClusterAsMember(t *testing.T) {
 		// when
 		return service.AddOrUpdateToolchainCluster(toolchainCluster)
 	})
-
 }
 
 func TestAddToolchainClusterAsHost(t *testing.T) {
@@ -73,8 +73,23 @@ func TestListToolchainClusterConfigs(t *testing.T) {
 	m2, sec2 := test.NewToolchainClusterWithEndpoint("west", "secret2", "http://m2.com", status, verify.Labels(cluster.Member, test.MemberOperatorNs, "m2ClusterName"))
 	host, secHost := test.NewToolchainCluster("host", "secretHost", status, verify.Labels(cluster.Host, test.HostOperatorNs, "hostClusterName"))
 	noise, secNoise := test.NewToolchainCluster("noise", "secretNoise", status, verify.Labels(cluster.Type("e2e"), test.MemberOperatorNs, "noiseClusterName"))
+	m1Spc := spaceprovisionerconfig.NewSpaceProvisionerConfig("eastSpc", "test-namespace",
+		spaceprovisionerconfig.Enabled(true),
+		spaceprovisionerconfig.ReferencingToolchainCluster(m1.Name),
+		spaceprovisionerconfig.MaxNumberOfSpaces(1000),
+		spaceprovisionerconfig.MaxMemoryUtilizationPercent(80),
+		spaceprovisionerconfig.WithPlacementRoles("tenant1"),
+		spaceprovisionerconfig.WithReadyConditionValid())
+	m2Spc := spaceprovisionerconfig.NewSpaceProvisionerConfig("westSpc", "test-namespace",
+		spaceprovisionerconfig.Enabled(true),
+		spaceprovisionerconfig.ReferencingToolchainCluster(m2.Name),
+		spaceprovisionerconfig.MaxNumberOfSpaces(1000),
+		spaceprovisionerconfig.MaxMemoryUtilizationPercent(60),
+		spaceprovisionerconfig.WithPlacementRoles("tenant2"),
+		spaceprovisionerconfig.WithReadyConditionValid())
+
 	require.NoError(t, toolchainv1alpha1.AddToScheme(scheme.Scheme))
-	cl := test.NewFakeClient(t, m1, m2, host, noise, sec1, sec2, secHost, secNoise)
+	cl := test.NewFakeClient(t, m1, m2, host, noise, sec1, sec2, secHost, secNoise, m1Spc, m2Spc)
 
 	t.Run("list members", func(t *testing.T) {
 		// when
@@ -90,7 +105,11 @@ func TestListToolchainClusterConfigs(t *testing.T) {
 			HasOwnerClusterName("m1ClusterName").
 			HasAPIEndpoint("http://m1.com").
 			ContainsLabel(cluster.RoleLabel(cluster.Tenant)). // the value is not used only the key matters
-			RestConfigHasHost("http://m1.com")
+			RestConfigHasHost("http://m1.com").
+			ProvisioningIsEnabled(true).
+			ProvisioningHasExactlyPlacementRoles("tenant1").
+			ProvisioningHasMaxMemoryPercent(80).
+			ProvisioningHasMaxNumberOfSpaces(1000)
 		verify.AssertClusterConfigThat(t, clusterConfigs[1]).
 			IsOfType(cluster.Member).
 			HasName("west").
@@ -98,7 +117,11 @@ func TestListToolchainClusterConfigs(t *testing.T) {
 			HasOwnerClusterName("m2ClusterName").
 			HasAPIEndpoint("http://m2.com").
 			ContainsLabel(cluster.RoleLabel(cluster.Tenant)). // the value is not used only the key matters
-			RestConfigHasHost("http://m2.com")
+			RestConfigHasHost("http://m2.com").
+			ProvisioningIsEnabled(true).
+			ProvisioningHasPlacementRole("tenant2").
+			ProvisioningHasMaxMemoryPercent(60).
+			ProvisioningHasMaxNumberOfSpaces(1000)
 	})
 
 	t.Run("list host", func(t *testing.T) {
@@ -114,7 +137,9 @@ func TestListToolchainClusterConfigs(t *testing.T) {
 			HasOperatorNamespace("toolchain-host-operator").
 			HasOwnerClusterName("hostClusterName").
 			HasAPIEndpoint("http://cluster.com").
-			RestConfigHasHost("http://cluster.com")
+			RestConfigHasHost("http://cluster.com").
+			ProvisioningIsEnabled(false).
+			ProvisioningHasExactlyPlacementRoles()
 	})
 
 	t.Run("list members when there is none present", func(t *testing.T) {
@@ -130,7 +155,7 @@ func TestListToolchainClusterConfigs(t *testing.T) {
 	})
 
 	t.Run("when list fails", func(t *testing.T) {
-		//given
+		// given
 		cl := test.NewFakeClient(t, m1, m2, host, noise, sec1, sec2, secHost, secNoise)
 		cl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 			return fmt.Errorf("some error")
@@ -145,7 +170,7 @@ func TestListToolchainClusterConfigs(t *testing.T) {
 	})
 
 	t.Run("when get secret fails", func(t *testing.T) {
-		//given
+		// given
 		cl := test.NewFakeClient(t, m1, m2, host, noise, sec1, sec2, secHost, secNoise)
 		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			return fmt.Errorf("some error")
@@ -158,4 +183,9 @@ func TestListToolchainClusterConfigs(t *testing.T) {
 		require.Error(t, err)
 		require.Empty(t, clusterConfigs)
 	})
+}
+
+func TestOnlyReadySpaceProvisionerConfigsUsed(t *testing.T) {
+	// TODO: implement
+	t.Skip("not implemented")
 }

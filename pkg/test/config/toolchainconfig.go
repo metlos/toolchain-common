@@ -96,6 +96,9 @@ func CapacityThresholds() *CapacityThresholdsOption {
 	return c
 }
 
+// This should only be used for setting the default resource capacity (aka memory utilization) threshold. The per-member options
+// are ignored. The memory utilization threshold is now configured using SpaceProvisionerConfig and can be set in the host-operator
+// tests using the modifiers in the NewMemberCluster* functions in host-operator/test package.
 func (c CapacityThresholdsOption) ResourceCapacityThreshold(defaultThreshold int, perMember ...PerMemberClusterOptionInt) CapacityThresholdsOption {
 	c.addFunction(func(config *toolchainv1alpha1.ToolchainConfig) {
 		config.Spec.Host.CapacityThresholds.ResourceCapacityThreshold.DefaultThreshold = &defaultThreshold
@@ -107,6 +110,8 @@ func (c CapacityThresholdsOption) ResourceCapacityThreshold(defaultThreshold int
 	return c
 }
 
+// Deprecated: This does effectively nothing. The max number of spaces is now configured per-cluster using the NewMemberCluster* functions in the
+// host-operator/test package.
 func (c CapacityThresholdsOption) MaxNumberOfSpaces(perMember ...PerMemberClusterOptionInt) CapacityThresholdsOption {
 	c.addFunction(func(config *toolchainv1alpha1.ToolchainConfig) {
 		config.Spec.Host.CapacityThresholds.MaxNumberOfSpacesPerMemberCluster = map[string]int{}

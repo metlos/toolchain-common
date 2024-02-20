@@ -5,7 +5,9 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/strings/slices"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var clusterCache = toolchainClusterClients{clusters: map[string]*CachedToolchainCluster{}}
@@ -33,10 +35,26 @@ type Config struct {
 	// then the OwnerClusterName has a name of the member - it has to be same name as the name
 	// that is used for identifying the member in a Host cluster
 	OwnerClusterName string
-
+	// Provisioning contains the space provisioning configuration of the cluster
+	Provisioning ProvisioningConfig
 	// Labels contains all the labels of the corresponding ToolchainCluster.
 	// They will be used for filtering ToolchainCluster's based on a given list of cluster-role labels.
+	//
+	// Note on backwards-compatibility: As the previous sentence claims, these labels used to be used
+	// for determining the cluster-roles of the clusters. This is in the process of being replaced
+	// with placement roles (in Config.Provisioning.PlacementRoles). The new logic for determining
+	// the placement roles looks first at the placement roles but also looks at these labels to remain
+	// backwards compatible and upgradable.
 	Labels map[string]string `json:"labels,omitempty"`
+}
+
+type ProvisioningConfig struct {
+	// PlacementRoles specifies the placement roles of the cluster
+	PlacementRoles []string
+	// Enabled specifies whether the cluster can be provisioned to
+	Enabled bool
+	// CapacityThresholds contains the capacity thresholds of the cluster
+	CapacityThresholds toolchainv1alpha1.SpaceProvisionerCapacityThresholds
 }
 
 // CachedToolchainCluster stores cluster client; cluster related info and previous health check probe results
@@ -81,11 +99,31 @@ var Ready Condition = func(cluster *CachedToolchainCluster) bool {
 	return IsReady(cluster.ClusterStatus)
 }
 
+var ProvisioningEnabled Condition = func(cluster *CachedToolchainCluster) bool {
+	return cluster.Provisioning.Enabled
+}
+
+func WithPlacementRoles(placementRoles ...string) Condition {
+	return func(cluster *CachedToolchainCluster) bool {
+		for _, pr := range placementRoles {
+			if !slices.Contains(cluster.Provisioning.PlacementRoles, pr) {
+				// check the legacy label-based cluster-roles, too
+				if _, ok := cluster.Labels[pr]; !ok {
+					log.Log.Info("------------------------------------------- member cluster doesn't have required placement roles", "cluster", cluster.Name, "placementRoles", placementRoles)
+					return false
+				}
+			}
+		}
+		return true
+	}
+}
+
 func (c *toolchainClusterClients) getCachedToolchainClustersByType(clusterType Type, conditions ...Condition) []*CachedToolchainCluster {
 	c.RLock()
 	defer c.RUnlock()
 	return Filter(clusterType, c.clusters, conditions...)
 }
+
 func Filter(clusterType Type, clusters map[string]*CachedToolchainCluster, conditions ...Condition) []*CachedToolchainCluster {
 	filteredClusters := make([]*CachedToolchainCluster, 0, len(clusters))
 clusters:

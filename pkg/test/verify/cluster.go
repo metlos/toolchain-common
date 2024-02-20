@@ -27,9 +27,9 @@ func AddToolchainClusterAsMember(t *testing.T, functionToVerify FunctionToVerify
 	memberLabels := []map[string]string{
 		Labels("", "", test.NameHost),
 		Labels(cluster.Member, "", test.NameHost),
-		Labels(cluster.Member, "member-ns", test.NameHost)}
+		Labels(cluster.Member, "member-ns", test.NameHost),
+	}
 	for _, labels := range memberLabels {
-
 		t.Run("add member ToolchainCluster", func(t *testing.T) {
 			for _, withCA := range []bool{true, false} {
 				toolchainCluster, sec := test.NewToolchainCluster("east", "secret", status, labels)
@@ -76,7 +76,8 @@ func AddToolchainClusterAsHost(t *testing.T, functionToVerify FunctionToVerify) 
 	status := test.NewClusterStatus(toolchainv1alpha1.ToolchainClusterReady, corev1.ConditionFalse)
 	memberLabels := []map[string]string{
 		Labels(cluster.Host, "", test.NameMember),
-		Labels(cluster.Host, "host-ns", test.NameMember)}
+		Labels(cluster.Host, "host-ns", test.NameMember),
+	}
 	for _, labels := range memberLabels {
 
 		t.Run("add host ToolchainCluster", func(t *testing.T) {
@@ -143,7 +144,8 @@ func AddToolchainClusterFailsBecauseOfEmptySecret(t *testing.T, functionToVerify
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "secret",
 			Namespace: "test-namespace",
-		}}
+		},
+	}
 	cl := test.NewFakeClient(t, toolchainCluster, secret)
 	service := newToolchainClusterService(t, cl, false)
 
@@ -288,5 +290,33 @@ func (a *ClusterConfigAssertion) ContainsLabel(label string) *ClusterConfigAsser
 func (a *ClusterConfigAssertion) RestConfigHasHost(host string) *ClusterConfigAssertion {
 	require.NotNil(a.t, a.clusterConfig.RestConfig)
 	assert.Equal(a.t, host, a.clusterConfig.RestConfig.Host)
+	return a
+}
+
+func (a *ClusterConfigAssertion) ProvisioningIsEnabled(enabled bool) *ClusterConfigAssertion {
+	assert.Equal(a.t, enabled, a.clusterConfig.Provisioning.Enabled)
+	return a
+}
+
+func (a *ClusterConfigAssertion) ProvisioningHasMaxMemoryPercent(threshold uint) *ClusterConfigAssertion {
+	assert.Equal(a.t, threshold, a.clusterConfig.Provisioning.CapacityThresholds.MaxMemoryUtilizationPercent)
+	return a
+}
+
+func (a *ClusterConfigAssertion) ProvisioningHasMaxNumberOfSpaces(threshold uint) *ClusterConfigAssertion {
+	assert.Equal(a.t, threshold, a.clusterConfig.Provisioning.CapacityThresholds.MaxNumberOfSpaces)
+	return a
+}
+
+func (a *ClusterConfigAssertion) ProvisioningHasPlacementRole(placementRole string) *ClusterConfigAssertion {
+	assert.Contains(a.t, a.clusterConfig.Provisioning.PlacementRoles, placementRole)
+	return a
+}
+
+func (a *ClusterConfigAssertion) ProvisioningHasExactlyPlacementRoles(placementRoles ...string) *ClusterConfigAssertion {
+	assert.Equal(a.t, len(placementRoles), len(a.clusterConfig.Provisioning.PlacementRoles))
+	for _, pr := range placementRoles {
+		assert.Contains(a.t, a.clusterConfig.Provisioning.PlacementRoles, pr)
+	}
 	return a
 }
