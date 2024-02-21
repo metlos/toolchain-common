@@ -117,7 +117,7 @@ func TestNotReadyWithReasonPredicate(t *testing.T) {
 	t.Run("matching", func(t *testing.T) {
 		// given
 		pred := &notReadyWithReason{expectedReason: "the right reason"}
-		spc := NewSpaceProvisionerConfig("spc", "default", WithReadyConditionInvalid("any reason"))
+		spc := NewSpaceProvisionerConfig("spc", "default", WithReadyConditionInvalid("the right reason"))
 
 		// when & then
 		assert.True(t, pred.Matches(spc))
