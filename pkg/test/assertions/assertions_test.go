@@ -21,7 +21,7 @@ func TestExplain(t *testing.T) {
 		expl := Explain(pred, actual)
 
 		// then
-		assert.True(t, strings.HasPrefix(expl, "predicate 'assertions.named' didn't match the object because of the following differences:"))
+		assert.True(t, strings.HasPrefix(expl, "predicate 'assertions.named' didn't match the object because of the following differences (- indicates the expected values, + the actual values):"))
 		assert.Contains(t, expl, "-")
 		assert.Contains(t, expl, "\"expected\"")
 		assert.Contains(t, expl, "+")
