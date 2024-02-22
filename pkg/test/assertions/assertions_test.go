@@ -43,6 +43,35 @@ func TestExplain(t *testing.T) {
 	})
 }
 
+func TestAssertThat(t *testing.T) {
+	t.Run("positive case", func(t *testing.T) {
+		// given
+		actual := &corev1.ConfigMap{}
+		actual.SetName("actual")
+		actual.SetLabels(map[string]string{"k": "v"})
+
+		// when
+		message := assertThat(actual, Has(Name("actual")), Has(Labels(map[string]string{"k": "v"})))
+
+		// then
+		assert.Empty(t, message)
+	})
+
+	t.Run("negative case", func(t *testing.T) {
+		// given
+		actual := &corev1.ConfigMap{}
+		actual.SetName("actual")
+		actual.SetLabels(map[string]string{"k": "v"})
+
+		// when
+		message := assertThat(actual, Has(Name("expected")), Has(Labels(map[string]string{"k": "another value"})))
+
+		// then
+		assert.Contains(t, message, "predicate 'assertions.named' didn't match the object because of the following differences")
+		assert.Contains(t, message, "predicate 'assertions.hasLabels' didn't match the object because of the following differences")
+	})
+}
+
 type predicateWithoutFixing struct{}
 
 var _ Predicate[client.Object] = (*predicateWithoutFixing)(nil)

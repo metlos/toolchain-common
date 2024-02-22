@@ -28,6 +28,16 @@ import (
 // the Explain function.
 func AssertThat(t *testing.T, object client.Object, predicates ...Predicate[client.Object]) {
 	t.Helper()
+	message := assertThat(object, predicates...)
+	if message != "" {
+		assert.Fail(t, "some predicates failed to match", message)
+	}
+}
+
+// assertThat contains the actual logic of the AssertThat function. This is separated out into
+// its own testable function because we cannot cannot capture the result of assert.Fail() in
+// another test.
+func assertThat(object client.Object, predicates ...Predicate[client.Object]) string {
 	results := make([]bool, len(predicates))
 	failure := false
 	for i, p := range predicates {
@@ -45,8 +55,9 @@ func AssertThat(t *testing.T, object client.Object, predicates ...Predicate[clie
 				sb.WriteString(Explain(p, object))
 			}
 		}
-		assert.Fail(t, "some predicates failed to match", sb.String())
+		return sb.String()
 	}
+	return ""
 }
 
 // Explain produces a textual explanation for why the provided predicate didn't match. The explanation
