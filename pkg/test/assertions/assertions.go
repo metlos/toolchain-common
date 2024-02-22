@@ -98,5 +98,5 @@ func Explain[T client.Object](predicate Predicate[client.Object], actual T) stri
 	expected := fix.FixToMatch(actual.DeepCopyObject().(client.Object))
 	diff := cmp.Diff(expected, actual)
 
-	return fmt.Sprintf("%s because of the following differences:\n%s", prefix, diff)
+	return fmt.Sprintf("%s because of the following differences (- indicates the expected values, + the actual values):\n%s", prefix, diff)
 }
