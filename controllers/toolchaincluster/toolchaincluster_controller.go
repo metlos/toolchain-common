@@ -19,9 +19,14 @@ import (
 func NewReconciler(mgr manager.Manager, namespace string, timeout time.Duration) *Reconciler {
 	cacheLog := log.Log.WithName("toolchaincluster_cache")
 	clusterCacheService := cluster.NewToolchainClusterService(mgr.GetClient(), cacheLog, namespace, timeout)
+	return NewReconcilerWithClusterCache(mgr.GetClient(), mgr.GetScheme(), clusterCacheService)
+}
+
+// NewReconcilerWithClusterCache returns a new reconciler initializer with the provided variables
+func NewReconcilerWithClusterCache(cl client.Client, scheme *runtime.Scheme, clusterCacheService cluster.ToolchainClusterService) *Reconciler {
 	return &Reconciler{
-		client:              mgr.GetClient(),
-		scheme:              mgr.GetScheme(),
+		client:              cl,
+		scheme:              scheme,
 		clusterCacheService: clusterCacheService,
 	}
 }
