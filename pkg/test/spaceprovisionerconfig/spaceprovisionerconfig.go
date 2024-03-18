@@ -25,7 +25,7 @@ func NewSpaceProvisionerConfig(name string, namespace string, opts ...CreateOpti
 	return spc
 }
 
-func NewEnabledValidSpaceProvisionerConfigWithTenantRole(name string, namespace string, referencedToolchainCluster string, opts ...CreateOption) *toolchainv1alpha1.SpaceProvisionerConfig {
+func NewEnabledValidTenantSPC(name string, namespace string, referencedToolchainCluster string, opts ...CreateOption) *toolchainv1alpha1.SpaceProvisionerConfig {
 	return NewSpaceProvisionerConfig(name, namespace,
 		append(opts,
 			Enabled(true),
@@ -35,7 +35,7 @@ func NewEnabledValidSpaceProvisionerConfigWithTenantRole(name string, namespace 
 	)
 }
 
-func NewValidSpaceProvisionerConfigWithTenantRole(name string, namespace string, referencedToolchainCluster string, opts ...CreateOption) *toolchainv1alpha1.SpaceProvisionerConfig {
+func NewValidTenantSPC(name string, namespace string, referencedToolchainCluster string, opts ...CreateOption) *toolchainv1alpha1.SpaceProvisionerConfig {
 	return NewSpaceProvisionerConfig(name, namespace,
 		append(opts,
 			WithReadyConditionValid(),
@@ -44,7 +44,7 @@ func NewValidSpaceProvisionerConfigWithTenantRole(name string, namespace string,
 	)
 }
 
-func NewEnabledValidSpaceProvisionerConfigWithoutPlacementRoles(name string, namespace string, referencedToolchainCluster string, opts ...CreateOption) *toolchainv1alpha1.SpaceProvisionerConfig {
+func NewEnabledValidSPC(name string, namespace string, referencedToolchainCluster string, opts ...CreateOption) *toolchainv1alpha1.SpaceProvisionerConfig {
 	return NewSpaceProvisionerConfig(name, namespace,
 		append(opts,
 			Enabled(true),
