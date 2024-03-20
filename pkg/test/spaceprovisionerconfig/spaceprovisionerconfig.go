@@ -25,34 +25,6 @@ func NewSpaceProvisionerConfig(name string, namespace string, opts ...CreateOpti
 	return spc
 }
 
-func NewEnabledValidTenantSPC(name string, namespace string, referencedToolchainCluster string, opts ...CreateOption) *toolchainv1alpha1.SpaceProvisionerConfig {
-	return NewSpaceProvisionerConfig(name, namespace,
-		append(opts,
-			Enabled(true),
-			WithReadyConditionValid(),
-			ReferencingToolchainCluster(referencedToolchainCluster),
-			WithPlacementRoles(PlacementRole("tenant")))...,
-	)
-}
-
-func NewValidTenantSPC(name string, namespace string, referencedToolchainCluster string, opts ...CreateOption) *toolchainv1alpha1.SpaceProvisionerConfig {
-	return NewSpaceProvisionerConfig(name, namespace,
-		append(opts,
-			WithReadyConditionValid(),
-			ReferencingToolchainCluster(referencedToolchainCluster),
-			WithPlacementRoles(PlacementRole("tenant")))...,
-	)
-}
-
-func NewEnabledValidSPC(name string, namespace string, referencedToolchainCluster string, opts ...CreateOption) *toolchainv1alpha1.SpaceProvisionerConfig {
-	return NewSpaceProvisionerConfig(name, namespace,
-		append(opts,
-			Enabled(true),
-			WithReadyConditionValid(),
-			ReferencingToolchainCluster(referencedToolchainCluster))...,
-	)
-}
-
 func PlacementRole(shortName string) string {
 	return cluster.RoleLabel(cluster.Role(shortName))
 }
