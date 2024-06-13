@@ -160,16 +160,9 @@ func (s *ToolchainClusterService) enrichLogger(cluster *toolchainv1alpha1.Toolch
 
 // NewClusterConfig generate a new cluster config by fetching the necessary info the given ToolchainCluster's associated Secret and taking all data from ToolchainCluster CR
 func NewClusterConfig(cl client.Client, toolchainCluster *toolchainv1alpha1.ToolchainCluster, timeout time.Duration) (*Config, error) {
-	clusterName := toolchainCluster.Name
-
-	apiEndpoint := toolchainCluster.Spec.APIEndpoint
-	if apiEndpoint == "" {
-		return nil, errors.Errorf("the api endpoint of cluster %s is empty", clusterName)
-	}
-
 	secretName := toolchainCluster.Spec.SecretRef.Name
 	if secretName == "" {
-		return nil, errors.Errorf("cluster %s does not have a secret name", clusterName)
+		return nil, errors.Errorf("cluster %s does not have a secret name", toolchainCluster.Name)
 	}
 	secret := &v1.Secret{}
 	name := types.NamespacedName{
@@ -178,7 +171,22 @@ func NewClusterConfig(cl client.Client, toolchainCluster *toolchainv1alpha1.Tool
 	}
 	err := cl.Get(context.TODO(), name, secret)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to get secret %s for cluster %s", name, clusterName)
+		return nil, errors.Wrapf(err, "unable to get secret %s for cluster %s", name, toolchainCluster.Name)
+	}
+
+	if _, ok := secret.Data["kubeconfig"]; ok {
+		return loadConfigFromKubeConfig(toolchainCluster, secret)
+	} else {
+		return loadConfigFromLegacyToolchainCluster(toolchainCluster, secret, timeout)
+	}
+}
+
+func loadConfigFromLegacyToolchainCluster(toolchainCluster *toolchainv1alpha1.ToolchainCluster, secret *v1.Secret, timeout time.Duration) (*Config, error) {
+	clusterName := toolchainCluster.Name
+
+	apiEndpoint := toolchainCluster.Spec.APIEndpoint
+	if apiEndpoint == "" {
+		return nil, errors.Errorf("the api endpoint of cluster %s is empty", clusterName)
 	}
 
 	token, tokenFound := secret.Data[toolchainTokenKey]
@@ -201,10 +209,43 @@ func NewClusterConfig(cl client.Client, toolchainCluster *toolchainv1alpha1.Tool
 	restConfig.Timeout = timeout
 
 	return &Config{
-		Name:              toolchainCluster.Name,
-		APIEndpoint:       toolchainCluster.Spec.APIEndpoint,
+		Name:              clusterName,
+		APIEndpoint:       apiEndpoint,
 		RestConfig:        restConfig,
 		OperatorNamespace: toolchainCluster.Labels[labelNamespace],
+		OwnerClusterName:  toolchainCluster.Labels[labelOwnerClusterName],
+		Labels:            toolchainCluster.Labels,
+	}, nil
+}
+
+func loadConfigFromKubeConfig(toolchainCluster *toolchainv1alpha1.ToolchainCluster, secret *v1.Secret) (*Config, error) {
+	cfg, err := clientcmd.Load(secret.Data["kubeconfig"])
+	if err != nil {
+		return nil, err
+	}
+	clientCfg := clientcmd.NewDefaultClientConfig(*cfg, &clientcmd.ConfigOverrides{})
+	restCfg, err := clientCfg.ClientConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	context := cfg.Contexts[cfg.CurrentContext]
+	if context == nil {
+		// this should theoretically never happen because we should not be able to get the rest config from an invalid kube config.
+		return nil, errors.New("There is no current context in the provided kubeconfig. Cannot pick a context unambiguously.")
+	}
+
+	cluster := cfg.Clusters[context.Cluster]
+	if cluster == nil {
+		// this should theoretically never happen because we should not be able to get the rest config from an invalid kube config.
+		return nil, errors.New("Could not unambiguously identify the cluster configuration to use in the kubeconfig.")
+	}
+
+	return &Config{
+		Name:              toolchainCluster.Name,
+		APIEndpoint:       cluster.Server,
+		RestConfig:        restCfg,
+		OperatorNamespace: context.Namespace,
 		OwnerClusterName:  toolchainCluster.Labels[labelOwnerClusterName],
 		Labels:            toolchainCluster.Labels,
 	}, nil

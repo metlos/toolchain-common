@@ -69,6 +69,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, err
 	}
 
+	// TODO: merge this into the "updateStatus" function coming in https://github.com/codeready-toolchain/toolchain-common/pull/401
+	if err = r.setApiEndpointAndOperatorNamespace(ctx, toolchainCluster, cachedCluster); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	clientSet, err := kubeclientset.NewForConfig(cachedCluster.RestConfig)
 	if err != nil {
 		reqLogger.Error(err, "cannot create ClientSet for the ToolchainCluster")
@@ -87,6 +92,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	}
 
 	return reconcile.Result{RequeueAfter: r.RequeAfter}, nil
+}
+
+func (r *Reconciler) setApiEndpointAndOperatorNamespace(ctx context.Context, tc *toolchainv1alpha1.ToolchainCluster, cached *cluster.CachedToolchainCluster) error {
+	tc.Status.APIEndpoint = cached.APIEndpoint
+	tc.Status.OperatorNamespace = cached.OperatorNamespace
+
+	return r.Client.Status().Update(ctx, tc)
 }
 
 func (r *Reconciler) migrateSecretToKubeConfig(ctx context.Context, tc *toolchainv1alpha1.ToolchainCluster) error {
