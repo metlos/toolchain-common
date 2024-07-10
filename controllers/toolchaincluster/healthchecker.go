@@ -28,7 +28,6 @@ type HealthChecker struct {
 }
 
 func (hc *HealthChecker) updateIndividualClusterStatus(ctx context.Context, toolchainCluster *toolchainv1alpha1.ToolchainCluster) error {
-
 	currentClusterStatus := hc.getClusterHealthStatus(ctx)
 
 	for index, currentCond := range currentClusterStatus.Conditions {
@@ -39,7 +38,7 @@ func (hc *HealthChecker) updateIndividualClusterStatus(ctx context.Context, tool
 		}
 	}
 
-	toolchainCluster.Status = *currentClusterStatus
+	toolchainCluster.Status.Conditions = currentClusterStatus.Conditions
 	if err := hc.localClusterClient.Status().Update(ctx, toolchainCluster); err != nil {
 		return errors.Wrapf(err, "Failed to update the status of cluster %s", toolchainCluster.Name)
 	}
