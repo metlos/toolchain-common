@@ -175,7 +175,7 @@ func NewClusterConfig(cl client.Client, toolchainCluster *toolchainv1alpha1.Tool
 	}
 
 	if _, ok := secret.Data["kubeconfig"]; ok {
-		return loadConfigFromKubeConfig(toolchainCluster, secret)
+		return loadConfigFromKubeConfig(toolchainCluster, secret, timeout)
 	} else {
 		return loadConfigFromLegacyToolchainCluster(toolchainCluster, secret, timeout)
 	}
@@ -218,7 +218,7 @@ func loadConfigFromLegacyToolchainCluster(toolchainCluster *toolchainv1alpha1.To
 	}, nil
 }
 
-func loadConfigFromKubeConfig(toolchainCluster *toolchainv1alpha1.ToolchainCluster, secret *v1.Secret) (*Config, error) {
+func loadConfigFromKubeConfig(toolchainCluster *toolchainv1alpha1.ToolchainCluster, secret *v1.Secret, timeout time.Duration) (*Config, error) {
 	cfg, err := clientcmd.Load(secret.Data["kubeconfig"])
 	if err != nil {
 		return nil, err
@@ -229,23 +229,19 @@ func loadConfigFromKubeConfig(toolchainCluster *toolchainv1alpha1.ToolchainClust
 		return nil, err
 	}
 
-	context := cfg.Contexts[cfg.CurrentContext]
-	if context == nil {
-		// this should theoretically never happen because we should not be able to get the rest config from an invalid kube config.
-		return nil, errors.New("There is no current context in the provided kubeconfig. Cannot pick a context unambiguously.")
-	}
+	// This is questionable, but the timeout is currently configurable in the member configuration so let's keep it here...
+	restCfg.Timeout = timeout
 
-	cluster := cfg.Clusters[context.Cluster]
-	if cluster == nil {
-		// this should theoretically never happen because we should not be able to get the rest config from an invalid kube config.
-		return nil, errors.New("Could not unambiguously identify the cluster configuration to use in the kubeconfig.")
+	operatorNamespace, _, err := clientCfg.Namespace()
+	if err != nil {
+		return nil, fmt.Errorf("Could not determine the operator namespace from the current context in the provided kubeconfig because of: %w", err)
 	}
 
 	return &Config{
 		Name:              toolchainCluster.Name,
-		APIEndpoint:       cluster.Server,
+		APIEndpoint:       restCfg.Host,
 		RestConfig:        restCfg,
-		OperatorNamespace: context.Namespace,
+		OperatorNamespace: operatorNamespace,
 		OwnerClusterName:  toolchainCluster.Labels[labelOwnerClusterName],
 		Labels:            toolchainCluster.Labels,
 	}, nil
