@@ -57,13 +57,24 @@ type PredicateMatchFixer[T client.Object] interface {
 //
 //	predicates.Is(predicates.Named("whatevs"))
 func Is[T client.Object](p Predicate[T]) Predicate[client.Object] {
+	if fp, ok := p.(FixingPredicate[T]); ok {
+		return &fixingCast[T]{Inner: fp}
+	}
 	return &cast[T]{Inner: p}
 }
 
 // Has is just an alias of Is. It is provided for better readability with certain predicate
 // names.
 func Has[T client.Object](p Predicate[T]) Predicate[client.Object] {
+	if fp, ok := p.(FixingPredicate[T]); ok {
+		return &fixingCast[T]{Inner: fp}
+	}
 	return &cast[T]{Inner: p}
+}
+
+type FixingPredicate[T client.Object] interface {
+	Predicate[T]
+	PredicateMatchFixer[T]
 }
 
 type cast[T client.Object] struct {
@@ -71,21 +82,27 @@ type cast[T client.Object] struct {
 	Inner Predicate[T]
 }
 
+type fixingCast[T client.Object] struct {
+	// Inner is public so that Explain (in assertions.go) can access it...
+	Inner FixingPredicate[T]
+}
+
 var (
 	_ Predicate[client.Object]           = (*cast[client.Object])(nil)
-	_ PredicateMatchFixer[client.Object] = (*cast[client.Object])(nil)
+	_ Predicate[client.Object]           = (*fixingCast[client.Object])(nil)
+	_ PredicateMatchFixer[client.Object] = (*fixingCast[client.Object])(nil)
 )
 
 func (c *cast[T]) Matches(obj client.Object) bool {
 	return c.Inner.Matches(obj.(T))
 }
 
-func (c *cast[T]) FixToMatch(obj client.Object) client.Object {
-	pf, ok := c.Inner.(PredicateMatchFixer[T])
-	if ok {
-		return pf.FixToMatch(obj.(T))
-	}
-	return obj
+func (c *fixingCast[T]) Matches(obj client.Object) bool {
+	return c.Inner.Matches(obj.(T))
+}
+
+func (c *fixingCast[T]) FixToMatch(obj client.Object) client.Object {
+	return c.Inner.FixToMatch(obj.(T))
 }
 
 type named struct {
