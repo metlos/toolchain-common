@@ -5,6 +5,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
+	"github.com/codeready-toolchain/toolchain-common/pkg/test/assertions"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -12,7 +13,7 @@ import (
 func TestReadyPredicate(t *testing.T) {
 	t.Run("matching", func(t *testing.T) {
 		// given
-		pred := &ready{}
+		pred := Ready()
 		spc := NewSpaceProvisionerConfig("spc", "default", WithReadyConditionValid())
 
 		// when & then
@@ -21,7 +22,7 @@ func TestReadyPredicate(t *testing.T) {
 
 	t.Run("fixer with no conditions", func(t *testing.T) {
 		// given
-		pred := &ready{}
+		pred := Ready().(assertions.PredicateMatchFixer[*toolchainv1alpha1.SpaceProvisionerConfig])
 		spc := NewSpaceProvisionerConfig("spc", "default")
 
 		// when
@@ -32,7 +33,7 @@ func TestReadyPredicate(t *testing.T) {
 	})
 	t.Run("fixer with different conditions", func(t *testing.T) {
 		// given
-		pred := &ready{}
+		pred := Ready().(assertions.PredicateMatchFixer[*toolchainv1alpha1.SpaceProvisionerConfig])
 		spc := NewSpaceProvisionerConfig("spc", "default")
 		spc.Status.Conditions = []toolchainv1alpha1.Condition{
 			{
@@ -50,7 +51,7 @@ func TestReadyPredicate(t *testing.T) {
 	})
 	t.Run("fixer with wrong condition", func(t *testing.T) {
 		// given
-		pred := &ready{}
+		pred := Ready().(assertions.PredicateMatchFixer[*toolchainv1alpha1.SpaceProvisionerConfig])
 		spc := NewSpaceProvisionerConfig("spc", "default", WithReadyConditionInvalid("because"))
 
 		// when
@@ -64,7 +65,7 @@ func TestReadyPredicate(t *testing.T) {
 func TestNotReadyPredicate(t *testing.T) {
 	t.Run("matching", func(t *testing.T) {
 		// given
-		pred := &notReady{}
+		pred := NotReady()
 		spc := NewSpaceProvisionerConfig("spc", "default", WithReadyConditionInvalid("any reason"))
 
 		// when & then
@@ -73,7 +74,7 @@ func TestNotReadyPredicate(t *testing.T) {
 
 	t.Run("fixer with no conditions", func(t *testing.T) {
 		// given
-		pred := &notReady{}
+		pred := NotReady().(assertions.PredicateMatchFixer[*toolchainv1alpha1.SpaceProvisionerConfig])
 		spc := NewSpaceProvisionerConfig("spc", "default")
 
 		// when
@@ -84,7 +85,7 @@ func TestNotReadyPredicate(t *testing.T) {
 	})
 	t.Run("fixer with different conditions", func(t *testing.T) {
 		// given
-		pred := &notReady{}
+		pred := NotReady().(assertions.PredicateMatchFixer[*toolchainv1alpha1.SpaceProvisionerConfig])
 		spc := NewSpaceProvisionerConfig("spc", "default")
 		spc.Status.Conditions = []toolchainv1alpha1.Condition{
 			{
@@ -102,7 +103,7 @@ func TestNotReadyPredicate(t *testing.T) {
 	})
 	t.Run("fixer with wrong condition", func(t *testing.T) {
 		// given
-		pred := &notReady{}
+		pred := NotReady().(assertions.PredicateMatchFixer[*toolchainv1alpha1.SpaceProvisionerConfig])
 		spc := NewSpaceProvisionerConfig("spc", "default", WithReadyConditionValid())
 
 		// when
@@ -116,7 +117,7 @@ func TestNotReadyPredicate(t *testing.T) {
 func TestNotReadyWithReasonPredicate(t *testing.T) {
 	t.Run("matching", func(t *testing.T) {
 		// given
-		pred := &notReadyWithReason{expectedReason: "the right reason"}
+		pred := NotReadyWithReason("the right reason")
 		spc := NewSpaceProvisionerConfig("spc", "default", WithReadyConditionInvalid("the right reason"))
 
 		// when & then
@@ -125,7 +126,7 @@ func TestNotReadyWithReasonPredicate(t *testing.T) {
 
 	t.Run("fixer with no conditions", func(t *testing.T) {
 		// given
-		pred := &notReadyWithReason{expectedReason: "the right reason"}
+		pred := NotReadyWithReason("the right reason").(assertions.PredicateMatchFixer[*toolchainv1alpha1.SpaceProvisionerConfig])
 		spc := NewSpaceProvisionerConfig("spc", "default")
 
 		// when
@@ -136,7 +137,7 @@ func TestNotReadyWithReasonPredicate(t *testing.T) {
 	})
 	t.Run("fixer with different conditions", func(t *testing.T) {
 		// given
-		pred := &notReadyWithReason{expectedReason: "the right reason"}
+		pred := NotReadyWithReason("the right reason").(assertions.PredicateMatchFixer[*toolchainv1alpha1.SpaceProvisionerConfig])
 		spc := NewSpaceProvisionerConfig("spc", "default")
 		spc.Status.Conditions = []toolchainv1alpha1.Condition{
 			{
@@ -154,7 +155,7 @@ func TestNotReadyWithReasonPredicate(t *testing.T) {
 	})
 	t.Run("fixer with wrong condition", func(t *testing.T) {
 		// given
-		pred := &notReadyWithReason{expectedReason: "the right reason"}
+		pred := NotReadyWithReason("the right reason").(assertions.PredicateMatchFixer[*toolchainv1alpha1.SpaceProvisionerConfig])
 		spc := NewSpaceProvisionerConfig("spc", "default", WithReadyConditionInvalid("the wrong reason"))
 
 		// when
