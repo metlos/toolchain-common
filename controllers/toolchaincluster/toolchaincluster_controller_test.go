@@ -45,7 +45,7 @@ func TestClusterControllerChecks(t *testing.T) {
 
 	t.Run("ToolchainCluster not found", func(t *testing.T) {
 		// given
-		NotFound, sec := newToolchainCluster(t, "notfound", tcNs, "http://not-found.com", toolchainv1alpha1.ToolchainClusterStatus{}, false)
+		NotFound, sec := newToolchainCluster(t, "notfound", tcNs, "http://not-found.com")
 
 		cl := test.NewFakeClient(t, sec)
 		reset := setupCachedClusters(t, cl, NotFound)
@@ -62,7 +62,7 @@ func TestClusterControllerChecks(t *testing.T) {
 
 	t.Run("Error while getting ToolchainCluster", func(t *testing.T) {
 		// given
-		tc, sec := newToolchainCluster(t, "tc", tcNs, "http://tc.com", toolchainv1alpha1.ToolchainClusterStatus{}, false)
+		tc, sec := newToolchainCluster(t, "tc", tcNs, "http://tc.com")
 
 		cl := test.NewFakeClient(t, sec)
 		cl.MockGet = func(ctx context.Context, key runtimeclient.ObjectKey, obj runtimeclient.Object, opts ...runtimeclient.GetOption) error {
@@ -83,7 +83,7 @@ func TestClusterControllerChecks(t *testing.T) {
 
 	t.Run("reconcile successful and requeued", func(t *testing.T) {
 		// given
-		stable, sec := newToolchainCluster(t, "stable", tcNs, "https://cluster.com", toolchainv1alpha1.ToolchainClusterStatus{}, false)
+		stable, sec := newToolchainCluster(t, "stable", tcNs, "https://cluster.com")
 
 		cl := test.NewFakeClient(t, stable, sec)
 		reset := setupCachedClusters(t, cl, stable)
@@ -102,7 +102,7 @@ func TestClusterControllerChecks(t *testing.T) {
 
 	t.Run("toolchain cluster cache not found", func(t *testing.T) {
 		// given
-		unstable, _ := newToolchainCluster(t, "unstable", tcNs, "http://unstable.com", toolchainv1alpha1.ToolchainClusterStatus{}, false)
+		unstable, _ := newToolchainCluster(t, "unstable", tcNs, "http://unstable.com")
 
 		cl := test.NewFakeClient(t, unstable)
 		controller, req := prepareReconcile(unstable, cl, requeAfter)
@@ -117,7 +117,7 @@ func TestClusterControllerChecks(t *testing.T) {
 
 	t.Run("error while updating a toolchain cluster status on cache not found", func(t *testing.T) {
 		// given
-		stable, _ := newToolchainCluster(t, "stable", tcNs, "https://cluster.com", toolchainv1alpha1.ToolchainClusterStatus{}, false)
+		stable, _ := newToolchainCluster(t, "stable", tcNs, "https://cluster.com")
 
 		cl := test.NewFakeClient(t, stable)
 		cl.MockStatusUpdate = func(ctx context.Context, obj runtimeclient.Object, opts ...runtimeclient.UpdateOption) error {
@@ -137,7 +137,7 @@ func TestClusterControllerChecks(t *testing.T) {
 
 	t.Run("error while updating a toolchain cluster status when health-check failed", func(t *testing.T) {
 		// given
-		stable, sec := newToolchainCluster(t, "stable", tcNs, "https://cluster.com", toolchainv1alpha1.ToolchainClusterStatus{}, false)
+		stable, sec := newToolchainCluster(t, "stable", tcNs, "https://cluster.com")
 		expectedErr := fmt.Errorf("my test error")
 		cl := test.NewFakeClient(t, stable, sec)
 		cl.MockStatusUpdate = func(ctx context.Context, obj runtimeclient.Object, opts ...runtimeclient.UpdateOption) error {
@@ -163,7 +163,7 @@ func TestClusterControllerChecks(t *testing.T) {
 func TestGetClusterHealth(t *testing.T) {
 	t.Run("Check health default", func(t *testing.T) {
 		// given
-		stable, sec := newToolchainCluster(t, "stable", "test-namespace", "https://cluster.com", toolchainv1alpha1.ToolchainClusterStatus{}, false)
+		stable, sec := newToolchainCluster(t, "stable", "test-namespace", "https://cluster.com")
 
 		cl := test.NewFakeClient(t, stable, sec)
 		reset := setupCachedClusters(t, cl, stable)
@@ -184,7 +184,7 @@ func TestGetClusterHealth(t *testing.T) {
 	})
 	t.Run("get health condition when health obtained is false ", func(t *testing.T) {
 		// given
-		stable, sec := newToolchainCluster(t, "stable", "test-namespace", "https://cluster.com", toolchainv1alpha1.ToolchainClusterStatus{}, false)
+		stable, sec := newToolchainCluster(t, "stable", "test-namespace", "https://cluster.com")
 
 		cl := test.NewFakeClient(t, stable, sec)
 		reset := setupCachedClusters(t, cl, stable)
@@ -238,8 +238,8 @@ func setupCachedClusters(t *testing.T, cl *test.FakeClient, clusters ...*toolcha
 	}
 }
 
-func newToolchainCluster(t *testing.T, name, tcNs string, apiEndpoint string, status toolchainv1alpha1.ToolchainClusterStatus, insecureTls bool) (*toolchainv1alpha1.ToolchainCluster, *corev1.Secret) {
-	toolchainCluster, secret := test.NewToolchainClusterWithEndpoint(t, name, tcNs, "test-namespace", "secret", apiEndpoint, status, insecureTls)
+func newToolchainCluster(t *testing.T, name, tcNs string, apiEndpoint string) (*toolchainv1alpha1.ToolchainCluster, *corev1.Secret) {
+	toolchainCluster, secret := test.NewToolchainClusterWithEndpoint(t, name, tcNs, "test-namespace", "secret", apiEndpoint, toolchainv1alpha1.ToolchainClusterStatus{}, false)
 	return toolchainCluster, secret
 }
 
