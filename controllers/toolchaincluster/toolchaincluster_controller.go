@@ -12,7 +12,6 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubeclientset "k8s.io/client-go/kubernetes"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -143,29 +142,5 @@ func clusterNotReadyCondition() toolchainv1alpha1.Condition {
 		Status:  corev1.ConditionFalse,
 		Reason:  toolchainv1alpha1.ToolchainClusterClusterNotReadyReason,
 		Message: healthzNotOk,
-	}
-}
-
-func composeKubeConfigFromData(token []byte, apiEndpoint, operatorNamespace string, insecureTls bool) clientcmdapi.Config {
-	return clientcmdapi.Config{
-		Contexts: map[string]*clientcmdapi.Context{
-			"ctx": {
-				Cluster:   "cluster",
-				Namespace: operatorNamespace,
-				AuthInfo:  "auth",
-			},
-		},
-		CurrentContext: "ctx",
-		Clusters: map[string]*clientcmdapi.Cluster{
-			"cluster": {
-				Server:                apiEndpoint,
-				InsecureSkipTLSVerify: insecureTls,
-			},
-		},
-		AuthInfos: map[string]*clientcmdapi.AuthInfo{
-			"auth": {
-				Token: string(token),
-			},
-		},
 	}
 }

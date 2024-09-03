@@ -9,7 +9,6 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/h2non/gock.v1"
 	corev1 "k8s.io/api/core/v1"
@@ -203,19 +202,6 @@ func TestGetClusterHealth(t *testing.T) {
 		require.Equal(t, reconcile.Result{RequeueAfter: requeAfter}, recResult)
 		assertClusterStatus(t, cl, "stable", clusterNotReadyCondition())
 	})
-}
-
-func TestComposeKubeConfig(t *testing.T) {
-	// when
-	kubeConfig := composeKubeConfigFromData([]byte("token"), "http://over.the.rainbow", "the-namespace", false)
-
-	// then
-	context := kubeConfig.Contexts[kubeConfig.CurrentContext]
-
-	assert.Equal(t, "token", kubeConfig.AuthInfos[context.AuthInfo].Token)
-	assert.Equal(t, "http://over.the.rainbow", kubeConfig.Clusters[context.Cluster].Server)
-	assert.Equal(t, "the-namespace", context.Namespace)
-	assert.False(t, kubeConfig.Clusters[context.Cluster].InsecureSkipTLSVerify)
 }
 
 func setupCachedClusters(t *testing.T, cl *test.FakeClient, clusters ...*toolchainv1alpha1.ToolchainCluster) func() {

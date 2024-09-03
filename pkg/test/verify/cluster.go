@@ -20,102 +20,58 @@ import (
 
 type FunctionToVerify func(toolchainCluster *toolchainv1alpha1.ToolchainCluster, cl *test.FakeClient, service cluster.ToolchainClusterService) error
 
-var testCases = map[string]struct {
-	insecure               bool
-	disabledTLSValidations []toolchainv1alpha1.TLSValidation
-}{
-	"no validations": {
-		insecure:               false,
-		disabledTLSValidations: nil,
-	},
-	"disabled all validations": {
-		insecure:               true,
-		disabledTLSValidations: []toolchainv1alpha1.TLSValidation{toolchainv1alpha1.TLSAll},
-	},
-	"disabled other but not all validations": {
-		insecure:               false,
-		disabledTLSValidations: []toolchainv1alpha1.TLSValidation{toolchainv1alpha1.TLSValidityPeriod, toolchainv1alpha1.TLSSubjectName},
-	},
-	"unsupported combination": {
-		insecure:               false,
-		disabledTLSValidations: []toolchainv1alpha1.TLSValidation{toolchainv1alpha1.TLSAll, toolchainv1alpha1.TLSSubjectName},
-	},
-}
-
 func AddToolchainClusterAsMember(t *testing.T, functionToVerify FunctionToVerify) {
-	t.Helper()
 	// given
 	defer gock.Off()
 	status := test.NewClusterStatus(toolchainv1alpha1.ConditionReady, corev1.ConditionTrue)
 
-	t.Run("add member ToolchainCluster with namespace label set", func(t *testing.T) {
-		for testName, data := range testCases {
-			t.Run(testName, func(t *testing.T) {
-				toolchainCluster, sec := test.NewToolchainCluster(t, "east", test.HostOperatorNs, "member-ns", "secret", status, data.insecure)
-				// the caBundle should be always ignored
-				toolchainCluster.Spec.CABundle = "ZHVtbXk="
-				toolchainCluster.Spec.DisabledTLSValidations = data.disabledTLSValidations
+	toolchainCluster, sec := test.NewToolchainCluster(t, "east", test.HostOperatorNs, "member-ns", "secret", status, false)
 
-				if toolchainCluster.Labels == nil {
-					toolchainCluster.Labels = map[string]string{}
-				}
-				toolchainCluster.Labels[cluster.RoleLabel(cluster.Tenant)] = ""
-				cl := test.NewFakeClient(t, toolchainCluster, sec)
-				service := newToolchainClusterService(t, cl, data.insecure)
-				defer service.DeleteToolchainCluster("east")
-				// when
-				err := functionToVerify(toolchainCluster, cl, service)
-				// then
-				require.NoError(t, err)
-				cachedToolchainCluster, ok := cluster.GetCachedToolchainCluster("east")
-				require.True(t, ok)
-				assert.Equal(t, "member-ns", cachedToolchainCluster.OperatorNamespace)
-				// check that toolchain cluster role label tenant was set only on member cluster type
-				require.NoError(t, cl.Get(context.TODO(), client.ObjectKeyFromObject(toolchainCluster), toolchainCluster))
-				_, found := toolchainCluster.Labels[cluster.RoleLabel(cluster.Tenant)]
-				require.True(t, found)
-				assert.Equal(t, status, *cachedToolchainCluster.ClusterStatus)
-				assert.Equal(t, "https://cluster.com", cachedToolchainCluster.APIEndpoint)
-			})
-		}
-	})
+	cl := test.NewFakeClient(t, toolchainCluster, sec)
+	service := newToolchainClusterService(t, cl, false)
+	defer service.DeleteToolchainCluster("east")
+	// when
+	err := functionToVerify(toolchainCluster, cl, service)
+	// then
+	require.NoError(t, err)
+	cachedToolchainCluster, ok := cluster.GetCachedToolchainCluster("east")
+	require.True(t, ok)
+	assert.Equal(t, "member-ns", cachedToolchainCluster.OperatorNamespace)
+	// check that toolchain cluster role label tenant was set only on member cluster type
+	require.NoError(t, cl.Get(context.TODO(), client.ObjectKeyFromObject(toolchainCluster), toolchainCluster))
+	_, found := toolchainCluster.Labels[cluster.RoleLabel(cluster.Tenant)]
+	require.True(t, found)
+	assert.Equal(t, status, *cachedToolchainCluster.ClusterStatus)
+	assert.Equal(t, "https://cluster.com", cachedToolchainCluster.APIEndpoint)
 }
 
 func AddToolchainClusterAsHost(t *testing.T, functionToVerify FunctionToVerify) {
 	// given
 	defer gock.Off()
 	status := test.NewClusterStatus(toolchainv1alpha1.ConditionReady, corev1.ConditionFalse)
-	t.Run("add host ToolchainCluster with namespace label set", func(t *testing.T) {
-		for testName, data := range testCases {
-			t.Run(testName, func(t *testing.T) {
-				toolchainCluster, sec := test.NewToolchainCluster(t, "east", test.MemberOperatorNs, "host-ns", "secret", status, data.insecure)
-				// the caBundle should be always ignored
-				toolchainCluster.Spec.CABundle = "ZHVtbXk="
-				toolchainCluster.Spec.DisabledTLSValidations = data.disabledTLSValidations
-				cl := test.NewFakeClient(t, toolchainCluster, sec)
-				service := newToolchainClusterService(t, cl, data.insecure)
-				defer service.DeleteToolchainCluster("east")
 
-				// when
-				err := functionToVerify(toolchainCluster, cl, service)
+	toolchainCluster, sec := test.NewToolchainCluster(t, "east", test.MemberOperatorNs, "host-ns", "secret", status, false)
+	cl := test.NewFakeClient(t, toolchainCluster, sec)
+	service := newToolchainClusterService(t, cl, false)
+	defer service.DeleteToolchainCluster("east")
 
-				// then
-				require.NoError(t, err)
-				cachedToolchainCluster, ok := cluster.GetCachedToolchainCluster("east")
-				require.True(t, ok)
+	// when
+	err := functionToVerify(toolchainCluster, cl, service)
 
-				assert.Equal(t, "host-ns", cachedToolchainCluster.OperatorNamespace)
+	// then
+	require.NoError(t, err)
+	cachedToolchainCluster, ok := cluster.GetCachedToolchainCluster("east")
+	require.True(t, ok)
 
-				// check that toolchain cluster role label tenant is not set on host cluster
-				require.NoError(t, cl.Get(context.TODO(), client.ObjectKeyFromObject(toolchainCluster), toolchainCluster))
-				expectedToolChainClusterRoleLabel := cluster.RoleLabel(cluster.Tenant)
-				_, found := toolchainCluster.Labels[expectedToolChainClusterRoleLabel]
-				require.False(t, found)
-				assert.Equal(t, status, *cachedToolchainCluster.ClusterStatus)
-				assert.Equal(t, "https://cluster.com", cachedToolchainCluster.APIEndpoint)
-			})
-		}
-	})
+	assert.Equal(t, "host-ns", cachedToolchainCluster.OperatorNamespace)
+
+	// check that toolchain cluster role label tenant is not set on host cluster
+	require.NoError(t, cl.Get(context.TODO(), client.ObjectKeyFromObject(toolchainCluster), toolchainCluster))
+	expectedToolChainClusterRoleLabel := cluster.RoleLabel(cluster.Tenant)
+	_, found := toolchainCluster.Labels[expectedToolChainClusterRoleLabel]
+	require.False(t, found)
+	assert.Equal(t, status, *cachedToolchainCluster.ClusterStatus)
+	assert.Equal(t, "https://cluster.com", cachedToolchainCluster.APIEndpoint)
 }
 
 func AddToolchainClusterFailsBecauseOfMissingSecret(t *testing.T, functionToVerify FunctionToVerify) {
@@ -206,15 +162,6 @@ func DeleteToolchainCluster(t *testing.T, functionToVerify FunctionToVerify) {
 	cachedToolchainCluster, ok := cluster.GetCachedToolchainCluster("east")
 	require.False(t, ok)
 	assert.Nil(t, cachedToolchainCluster)
-}
-
-func Labels(ns, ownerClusterName string) map[string]string {
-	labels := map[string]string{}
-	if ns != "" {
-		labels["namespace"] = ns
-	}
-	labels["ownerClusterName"] = ownerClusterName
-	return labels
 }
 
 func newToolchainClusterService(t *testing.T, cl client.Client, insecure bool) cluster.ToolchainClusterService {

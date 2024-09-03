@@ -19,16 +19,10 @@ import (
 )
 
 const (
-	labelNamespace        = "namespace"
 	labelOwnerClusterName = "ownerClusterName"
 	LabelType             = "type"
 	// labelClusterRolePrefix is the prefix that defines the cluster role as label key
 	labelClusterRolePrefix = "cluster-role"
-
-	// These are not used
-	// toolchainAPIQPS   = 20.0
-	// toolchainAPIBurst = 30
-	// toolchainTokenKey = "token"
 )
 
 // ToolchainClusterService manages cached cluster kube clients and related ToolchainCluster CRDs
