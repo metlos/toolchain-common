@@ -75,8 +75,8 @@ func TestListToolchainClusterConfigs(t *testing.T) {
 	status := test.NewClusterStatus(toolchainv1alpha1.ConditionReady, corev1.ConditionTrue)
 	require.NoError(t, toolchainv1alpha1.AddToScheme(scheme.Scheme))
 
-	m1, sec1 := test.NewToolchainClusterWithEndpoint(t, "east", test.HostOperatorNs, test.MemberOperatorNs, "secret1", "http://m1.com", status, false)
-	m2, sec2 := test.NewToolchainClusterWithEndpoint(t, "west", test.HostOperatorNs, test.MemberOperatorNs, "secret2", "http://m2.com", status, false)
+	m1, sec1 := test.NewToolchainClusterWithEndpoint(t, "east", test.HostOperatorNs, test.MemberOperatorNs, "secret1", "https://m1.com", status, false)
+	m2, sec2 := test.NewToolchainClusterWithEndpoint(t, "west", test.HostOperatorNs, test.MemberOperatorNs, "secret2", "https://m2.com", status, false)
 	host, secHost := test.NewToolchainCluster(t, "host", test.MemberOperatorNs, test.HostOperatorNs, "secretHost", status, false)
 	noise, secNoise := test.NewToolchainCluster(t, "noise", "noise-namespace", "secretNoise", test.MemberOperatorNs, status, false)
 	require.NoError(t, toolchainv1alpha1.AddToScheme(scheme.Scheme))
