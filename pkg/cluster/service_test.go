@@ -93,13 +93,13 @@ func TestListToolchainClusterConfigs(t *testing.T) {
 		verify.AssertClusterConfigThat(t, clusterConfigs[0]).
 			HasName("east").
 			HasOperatorNamespace("toolchain-member-operator").
-			HasAPIEndpoint("http://m1.com").
-			RestConfigHasHost("http://m1.com")
+			HasAPIEndpoint("https://m1.com").
+			RestConfigHasHost("https://m1.com")
 		verify.AssertClusterConfigThat(t, clusterConfigs[1]).
 			HasName("west").
 			HasOperatorNamespace("toolchain-member-operator").
-			HasAPIEndpoint("http://m2.com").
-			RestConfigHasHost("http://m2.com")
+			HasAPIEndpoint("https://m2.com").
+			RestConfigHasHost("https://m2.com")
 	})
 
 	t.Run("list host", func(t *testing.T) {
