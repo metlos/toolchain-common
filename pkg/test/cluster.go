@@ -48,7 +48,6 @@ func NewToolchainClusterWithEndpoint(t *testing.T, name, tcNs, operatorNs, secNa
 			SecretRef: toolchainv1alpha1.LocalSecretReference{
 				Name: secName,
 			},
-			APIEndpoint: apiEndpoint,
 		},
 		ObjectMeta: v1.ObjectMeta{
 			Name:      name,
