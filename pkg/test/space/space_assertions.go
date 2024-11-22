@@ -412,6 +412,12 @@ func ProvisionedNamespaces(provisionedNamespaces []toolchainv1alpha1.SpaceNamesp
 
 // condition predicates are done generically
 
+func Conditions(pred test.Predicate[[]toolchainv1alpha1.Condition]) test.Predicate[*toolchainv1alpha1.Space] {
+	return test.BridgeToConditions(func(s *toolchainv1alpha1.Space) *[]toolchainv1alpha1.Condition {
+		return &s.Status.Conditions
+	}, pred)
+}
+
 // impls
 
 type (
