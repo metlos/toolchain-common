@@ -53,6 +53,10 @@ func SomeConditionThat(conditionType toolchainv1alpha1.ConditionType, preds ...P
 	return &conditionsPredicate{conditionType: conditionType, predicates: preds}
 }
 
+func SomeConditionLike(expected toolchainv1alpha1.Condition) Predicate[[]toolchainv1alpha1.Condition] {
+	return SomeConditionThat(expected.Type, IsLike(expected))
+}
+
 func AllConditions(conditions map[toolchainv1alpha1.ConditionType][]Predicate[toolchainv1alpha1.Condition]) Predicate[[]toolchainv1alpha1.Condition] {
 	return &allConditionsLikePredicate{conditions: conditions}
 }
