@@ -108,10 +108,10 @@ func (p *unknownConsumedCapacity) FixToMatch(spc *toolchainv1alpha1.SpaceProvisi
 	return spc
 }
 
-func ReadyConditionThat(preds ...test.Predicate[toolchainv1alpha1.Condition]) test.Predicate[*toolchainv1alpha1.SpaceProvisionerConfig] {
-	return test.ConditionOnObject(func(spc *toolchainv1alpha1.SpaceProvisionerConfig) *[]toolchainv1alpha1.Condition {
+func ReadyConditionThat(pred test.Predicate[[]toolchainv1alpha1.Condition]) test.Predicate[*toolchainv1alpha1.SpaceProvisionerConfig] {
+	return test.BridgeToConditions(func(spc *toolchainv1alpha1.SpaceProvisionerConfig) *[]toolchainv1alpha1.Condition {
 		return &spc.Status.Conditions
-	}, toolchainv1alpha1.ConditionReady, preds...)
+	}, pred)
 }
 
 // func Ready() test.Predicate[*toolchainv1alpha1.SpaceProvisionerConfig] {

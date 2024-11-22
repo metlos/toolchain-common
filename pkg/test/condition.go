@@ -6,8 +6,6 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/stretchr/testify/require"
-
 	conditions "github.com/codeready-toolchain/toolchain-common/pkg/condition"
 
 	corev1 "k8s.io/api/core/v1"
@@ -20,69 +18,59 @@ import (
 // because the LastTransitionTime of the actual conditions can be modified but the conditions
 // still should be treated as matched
 func AssertConditionsMatch(t T, actual []toolchainv1alpha1.Condition, expected ...toolchainv1alpha1.Condition) {
-	require.Equal(t, len(expected), len(actual))
-	for _, c := range expected {
-		AssertContainsCondition(t, actual, c)
-	}
+	AssertThat(t, actual, Has(AllConditionsLike(expected...)))
 }
 
 // AssertContainsCondition asserts that the specified list of conditions contains the specified condition.
 // LastTransitionTime is ignored.
 func AssertContainsCondition(t T, conditions []toolchainv1alpha1.Condition, contains toolchainv1alpha1.Condition) {
-	AssertThat(t, conditions, Has(ConditionThat(contains.Type, HasStatus(contains.Status), HasReason(contains.Reason), HasMessage(contains.Message))))
+	AssertThat(t, conditions, Has(SomeConditionThat(contains.Type, HasStatus(contains.Status), HasReason(contains.Reason), HasMessage(contains.Message))))
 }
 
 // AssertConditionsMatchAndRecentTimestamps asserts that the specified list of conditions match AND asserts that the timestamps are recent
 func AssertConditionsMatchAndRecentTimestamps(t T, actual []toolchainv1alpha1.Condition, expected ...toolchainv1alpha1.Condition) {
-	require.Equal(t, len(expected), len(actual))
-
 	cutoff := time.Now().Add(-5 * time.Second)
+	expectedMap := map[toolchainv1alpha1.ConditionType][]Predicate[toolchainv1alpha1.Condition]{}
 	for _, c := range expected {
-		AssertThat(t, actual, Has(ConditionThat(c.Type,
-			HasStatus(c.Status),
-			HasReason(c.Reason),
-			HasMessage(c.Message),
-			HasTransitionTimeLaterThan(cutoff),
-			HasUpdateTimeLaterThan(cutoff))))
+		expectedMap[c.Type] = []Predicate[toolchainv1alpha1.Condition]{IsLike(c), HasTransitionTimeLaterThan(cutoff), HasUpdateTimeLaterThan(cutoff)}
 	}
+	AssertThat(t, actual, Has(AllConditions(expectedMap)))
 }
 
 // ConditionsMatch returns true if the specified list A of conditions is equal to specified
 // list B of conditions ignoring the order of the elements
 func ConditionsMatch(actual []toolchainv1alpha1.Condition, expected ...toolchainv1alpha1.Condition) bool {
-	if len(expected) != len(actual) {
-		return false
-	}
-	for _, c := range expected {
-		if !ContainsCondition(actual, c) {
-			return false
-		}
-	}
-	for _, c := range actual {
-		if !ContainsCondition(expected, c) {
-			return false
-		}
-	}
-	return true
+	return AllConditionsLike(expected...).Matches(actual)
 }
 
 // ContainsCondition returns true if the specified list of conditions contains the specified condition.
 // LastTransitionTime is ignored.
 func ContainsCondition(conditions []toolchainv1alpha1.Condition, contains toolchainv1alpha1.Condition) bool {
-	for _, c := range conditions {
-		if c.Type == contains.Type {
-			return contains.Status == c.Status && contains.Reason == c.Reason && contains.Message == c.Message
-		}
-	}
-	return false
+	return SomeConditionThat(contains.Type, IsLike(contains)).Matches(conditions)
 }
 
-func ConditionThat(conditionType toolchainv1alpha1.ConditionType, preds ...Predicate[toolchainv1alpha1.Condition]) Predicate[[]toolchainv1alpha1.Condition] {
+func SomeConditionThat(conditionType toolchainv1alpha1.ConditionType, preds ...Predicate[toolchainv1alpha1.Condition]) Predicate[[]toolchainv1alpha1.Condition] {
 	return &conditionsPredicate{conditionType: conditionType, predicates: preds}
 }
 
-func ConditionOnObject[T client.Object](accessor func(T) *[]toolchainv1alpha1.Condition, conditionType toolchainv1alpha1.ConditionType, preds ...Predicate[toolchainv1alpha1.Condition]) Predicate[T] {
-	return &conditionsOnObjectPredicate[T]{accessor: accessor, conditionsPredicate: conditionsPredicate{conditionType: conditionType, predicates: preds}}
+func AllConditions(conditions map[toolchainv1alpha1.ConditionType][]Predicate[toolchainv1alpha1.Condition]) Predicate[[]toolchainv1alpha1.Condition] {
+	return &allConditionsLikePredicate{conditions: conditions}
+}
+
+func AllConditionsLike(expected ...toolchainv1alpha1.Condition) Predicate[[]toolchainv1alpha1.Condition] {
+	expectedMap := map[toolchainv1alpha1.ConditionType][]Predicate[toolchainv1alpha1.Condition]{}
+	for _, c := range expected {
+		expectedMap[c.Type] = []Predicate[toolchainv1alpha1.Condition]{IsLike(c)}
+	}
+	return &allConditionsLikePredicate{conditions: expectedMap}
+}
+
+func BridgeToConditions[T client.Object](accessor func(T) *[]toolchainv1alpha1.Condition, pred Predicate[[]toolchainv1alpha1.Condition]) Predicate[T] {
+	return &bridgePredicate[T]{accessor: accessor, pred: pred}
+}
+
+func IsLike(cond toolchainv1alpha1.Condition) Predicate[toolchainv1alpha1.Condition] {
+	return &likePredicate{condition: cond}
 }
 
 func IsTrue() Predicate[toolchainv1alpha1.Condition] {
@@ -260,20 +248,22 @@ func (c *conditionPredicate) FixToMatch(cond toolchainv1alpha1.Condition) toolch
 	return cond
 }
 
-type conditionsOnObjectPredicate[T client.Object] struct {
+type bridgePredicate[T client.Object] struct {
 	accessor func(T) *[]toolchainv1alpha1.Condition
-	conditionsPredicate
+	pred     Predicate[[]toolchainv1alpha1.Condition]
 }
 
-func (c *conditionsOnObjectPredicate[T]) Matches(obj T) bool {
+func (c *bridgePredicate[T]) Matches(obj T) bool {
 	conds := c.accessor(obj)
-	return c.conditionsPredicate.Matches(*conds)
+	return c.pred.Matches(*conds)
 }
 
-func (c *conditionsOnObjectPredicate[T]) FixToMatch(obj T) T {
-	obj = obj.DeepCopyObject().(T)
-	conds := c.accessor(obj)
-	*conds = c.conditionsPredicate.FixToMatch(*conds)
+func (c *bridgePredicate[T]) FixToMatch(obj T) T {
+	if p, ok := c.pred.(PredicateMatchFixer[[]toolchainv1alpha1.Condition]); ok {
+		obj = obj.DeepCopyObject().(T)
+		conds := c.accessor(obj)
+		*conds = p.FixToMatch(*conds)
+	}
 	return obj
 }
 
@@ -282,7 +272,6 @@ type recencyPredicate struct {
 	transition    bool
 }
 
-// Matches implements ConditionPredicate.
 func (r *recencyPredicate) Matches(cond toolchainv1alpha1.Condition) bool {
 	var condTime time.Time
 	if r.transition {
@@ -297,7 +286,6 @@ func (r *recencyPredicate) Matches(cond toolchainv1alpha1.Condition) bool {
 	return condTime.After(r.oldestAllowed)
 }
 
-// FixToMatch implements ConditionPredicate.
 func (r *recencyPredicate) FixToMatch(cond toolchainv1alpha1.Condition) toolchainv1alpha1.Condition {
 	if r.transition {
 		cond.LastTransitionTime.Time = r.oldestAllowed
@@ -307,11 +295,94 @@ func (r *recencyPredicate) FixToMatch(cond toolchainv1alpha1.Condition) toolchai
 	return cond
 }
 
+type likePredicate struct {
+	condition toolchainv1alpha1.Condition
+}
+
+func (r *likePredicate) Matches(cond toolchainv1alpha1.Condition) bool {
+	return r.condition.Type == cond.Type && r.condition.Status == cond.Status && r.condition.Reason == cond.Reason && r.condition.Message == cond.Message
+}
+
+func (r *likePredicate) FixToMatch(cond toolchainv1alpha1.Condition) toolchainv1alpha1.Condition {
+	cond.Type = r.condition.Type
+	cond.Status = r.condition.Status
+	cond.Reason = r.condition.Reason
+	cond.Message = r.condition.Message
+	return cond
+}
+
+type allConditionsLikePredicate struct {
+	conditions map[toolchainv1alpha1.ConditionType][]Predicate[toolchainv1alpha1.Condition]
+}
+
+func (r *allConditionsLikePredicate) Matches(conds []toolchainv1alpha1.Condition) bool {
+	if len(conds) != len(r.conditions) {
+		return false
+	}
+
+	for _, cond := range conds {
+		preds, ok := r.conditions[cond.Type]
+		if !ok {
+			return false
+		}
+
+		for _, p := range preds {
+			if !p.Matches(cond) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (r *allConditionsLikePredicate) FixToMatch(conds []toolchainv1alpha1.Condition) []toolchainv1alpha1.Condition {
+	remainingTypes := make(map[toolchainv1alpha1.ConditionType]bool, len(r.conditions))
+	for t := range r.conditions {
+		remainingTypes[t] = true
+	}
+
+	fixed := []toolchainv1alpha1.Condition{}
+
+	fix := func(cond toolchainv1alpha1.Condition, preds []Predicate[toolchainv1alpha1.Condition]) toolchainv1alpha1.Condition {
+		for _, p := range preds {
+			if p, ok := p.(PredicateMatchFixer[toolchainv1alpha1.Condition]); ok {
+				cond = p.FixToMatch(cond)
+			}
+		}
+		return cond
+	}
+
+	for _, cond := range conds {
+		preds, ok := r.conditions[cond.Type]
+		if !ok {
+			// we don't add the condition to the fixed ones, effectively removing it
+			continue
+		}
+		cond = fix(cond, preds)
+		fixed = append(fixed, cond)
+		delete(remainingTypes, cond.Type)
+	}
+
+	for t := range remainingTypes {
+		preds := r.conditions[t]
+		cond := toolchainv1alpha1.Condition{}
+		cond.Type = t
+		cond = fix(cond, preds)
+		fixed = append(fixed, cond)
+	}
+
+	return fixed
+}
+
 var (
 	_ Predicate[[]toolchainv1alpha1.Condition]           = (*conditionsPredicate)(nil)
 	_ PredicateMatchFixer[[]toolchainv1alpha1.Condition] = (*conditionsPredicate)(nil)
+	_ Predicate[[]toolchainv1alpha1.Condition]           = (*allConditionsLikePredicate)(nil)
+	_ PredicateMatchFixer[[]toolchainv1alpha1.Condition] = (*allConditionsLikePredicate)(nil)
 	_ Predicate[toolchainv1alpha1.Condition]             = (*conditionPredicate)(nil)
 	_ PredicateMatchFixer[toolchainv1alpha1.Condition]   = (*conditionPredicate)(nil)
 	_ Predicate[toolchainv1alpha1.Condition]             = (*recencyPredicate)(nil)
 	_ PredicateMatchFixer[toolchainv1alpha1.Condition]   = (*recencyPredicate)(nil)
+	_ Predicate[toolchainv1alpha1.Condition]             = (*likePredicate)(nil)
+	_ PredicateMatchFixer[toolchainv1alpha1.Condition]   = (*likePredicate)(nil)
 )
